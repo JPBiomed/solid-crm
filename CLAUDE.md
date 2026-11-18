@@ -2,6 +2,13 @@
 
 Guidance for Claude Code (claude.ai/code) working in this repository.
 
+**This repo is the Maps of Making CRM, built from solid-kit.** The CRM lives
+in `src/crm/` and its pod layout in [`docs/data-model.md`](docs/data-model.md):
+change that document with any change to what is written to the pod. Screens
+register routes in `src/crm/routes.ts`; plugins (LinkedIn, Gmail, Matrix) add
+theirs the same way and are imported once in `src/main.ts`. Everything below
+is the kit's own guidance, which still applies.
+
 **Read [`docs/atlas.md`](docs/atlas.md) first.** It owns the map of how this
 repo relates to the provider, the backoffice and the apps. This file owns only
 facts about the kit itself; anything cross-cutting belongs in the atlas or an

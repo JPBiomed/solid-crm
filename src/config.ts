@@ -6,7 +6,7 @@
  */
 
 /** Shown on the provider's consent screen. Name the app, not the kit. */
-export const APP_NAME = "Solid Kit App";
+export const APP_NAME = "Maps of Making CRM";
 
 /**
  * Stable across reloads so `restorePreviousSession` can find the session again.
@@ -17,11 +17,11 @@ export const APP_NAME = "Solid Kit App";
  * ids plus distinct origins is belt and braces; distinct ids alone is the part
  * you control from here.
  */
-export const SESSION_ID = "solid-kit-app";
+export const SESSION_ID = "mom-crm";
 
 /**
  * Prefilled in the login field. Either an OIDC issuer URL or a WebID works —
  * `loginWithIdentifier` accepts both. An issuer is the friendlier default: most
  * people know where their pod lives, not what their WebID is.
  */
-export const DEFAULT_IDENTIFIER = "https://pod.nicolasdb.eu/";
+export const DEFAULT_IDENTIFIER = "https://pod.mapsofmaking.org/";

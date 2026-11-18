@@ -5,20 +5,28 @@
  * `#app`. That is enough for an app of this size, and it is what the three apps
  * this kit was extracted from all converged on independently.
  *
- * Replace `renderHome` with the real thing. Everything above it is the part
- * worth keeping unchanged between apps.
+ * `startCrm` is the app; everything above it is the kit's shell, unchanged.
  */
 import "./styles/fonts.css";
 import "./styles/core.css";
 import "./styles/theme.css";
 import "./styles/patterns.css";
 import "./styles/editorial.css";
-import { completeLogin, getSession, loginWithIdentifier, logout } from "./lib/auth";
+import { completeLogin, loginWithIdentifier, logout } from "./lib/auth";
 import { describePodError, getPrimaryPodUrl, isAuthError } from "./lib/pod";
 import { APP_NAME, DEFAULT_IDENTIFIER } from "./config";
 import { focusView, trackInputModality } from "./ui/a11y";
 import { renderError, renderPending } from "./ui/patterns";
 import { renderThemeButton, wireThemeButton } from "./ui/theme";
+import "./styles/crm.css";
+import { CrmStore, DemoStore } from "./crm/store";
+import { parseHash, resolve, type Ctx } from "./crm/routes";
+import { seedDemo } from "./crm/demo";
+// Screens register their routes on import. Plugins add theirs the same way.
+import "./crm/views/home";
+import "./crm/views/contacts";
+import "./crm/views/organizations";
+import "./crm/views/projects";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -32,7 +40,7 @@ function esc(value: string): string {
 /**
  * The theme button, at the foot of every screen a person can stop at — Light
  * by default, then Dark, then the device's own setting (ADR 008). Part of the shell,
- * not of `renderHome`, so an app keeps it when the placeholder is replaced.
+ * not of a screen, so every screen keeps it.
  */
 function themeFooter(): string {
   return `
@@ -59,7 +67,7 @@ async function main(): Promise<void> {
 
   try {
     const podUrl = await getPrimaryPodUrl(webId);
-    await renderHome(webId, podUrl);
+    await startCrm(new CrmStore(podUrl), webId, podUrl);
   } catch (err) {
     renderErrorView(webId, err);
   }
@@ -148,71 +156,52 @@ function renderErrorView(webId: string, err: unknown): void {
 }
 
 /**
- * Replace this. It exists to prove the chain end to end — session, WebID, pod
- * root — so a new app starts from something known to work rather than from a
- * blank file.
- *
- * The links to the kit's reference pages live HERE, in the placeholder, rather
- * than in the shell above: replacing this function is what removes them. An app
- * built from the kit gets no stray links pointing at pages its users have no
- * business seeing, and nothing has to be remembered or configured off.
- * Both reference pages still ship in `dist/` — /styleguide.html and
- * /guidelines.html — they just stop being linked from the app.
+ * The CRM. Each navigation reloads the collections (revalidated reads, so a
+ * screen never shows something older than the pod) and renders the route.
  */
-async function renderHome(webId: string, podUrl: string): Promise<void> {
-  app.innerHTML = `
-    <main class="screen stack">
-      <div class="topbar">
-        <span class="meta">${esc(APP_NAME)}</span>
-        <button id="logout" class="ghost">Sign out</button>
-      </div>
-      <h1>Connected</h1>
-      <p class="lead">This is where the app goes.</p>
-      <dl class="stack">
-        <div>
-          <dt class="label-mono">WebID</dt>
-          <dd><code>${esc(webId)}</code></dd>
-        </div>
-        <div>
-          <dt class="label-mono">Pod root</dt>
-          <dd><code>${esc(podUrl)}</code></dd>
-        </div>
-      </dl>
-      <p class="hint">
-        Session id <code>${esc(getSession().info.sessionId)}</code> — must be
-        unique per app, see src/config.ts.
-      </p>
+async function startCrm(store: CrmStore, webId: string, podUrl: string): Promise<void> {
+  let data = await store.load();
+  let generation = 0;
 
-      <hr />
+  const render = async (reload: boolean) => {
+    const mine = ++generation;
+    if (reload) {
+      try {
+        data = await store.load();
+      } catch (err) {
+        renderErrorView(webId, err);
+        return;
+      }
+    }
+    // A slower load from an earlier navigation must not paint over a newer one.
+    if (mine !== generation) return;
+    const { path, query } = parseHash(location.hash);
+    const match = resolve(path) ?? resolve("/")!;
+    const ctx: Ctx = {
+      app, store, data, webId, podUrl, query,
+      params: match.params,
+      go: (to) => {
+        if (location.hash === `#${to}`) void render(true);
+        else location.hash = to;
+      },
+      refresh: () => render(true),
+    };
+    await match.route.render(ctx);
+  };
 
-      <nav class="stack">
-        <p class="label-mono">Kit reference</p>
-        <p>
-          <a href="/styleguide.html">Design system</a>
-          <span class="hint">
-            — tokens, type scale and components, with live contrast ratios.
-          </span>
-        </p>
-        <p>
-          <a href="/guidelines.html">UX guidelines</a>
-          <span class="hint">
-            — the interaction patterns, running, and how their limits are set.
-          </span>
-        </p>
-        <p class="hint">This block goes when you replace <code>renderHome</code>.</p>
-      </nav>
-      ${themeFooter()}
-    </main>
-  `;
-  document.querySelector<HTMLButtonElement>("#logout")!.addEventListener("click", async () => {
-    await logout();
-    renderLoginView();
-  });
+  window.addEventListener("hashchange", () => void render(true));
+  await render(false);
+}
 
-  focusView(app);
+async function startDemo(): Promise<void> {
+  const store = new DemoStore();
+  await seedDemo(store);
+  await startCrm(store, "https://demo.invalid/profile/card#me", store.root);
 }
 
 trackInputModality();
 // Once, on the container: every screen replaces its contents, switch included.
 wireThemeButton(app);
-main();
+// `?demo`: the whole app on sample data, nothing read from or written to a pod.
+if (new URLSearchParams(location.search).has("demo")) void startDemo();
+else void main();

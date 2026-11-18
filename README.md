@@ -1,4 +1,66 @@
-# solid-kit
+# Maps of Making CRM
+
+A small CRM for Maps of Making activities. All data stays in your own Solid
+pod (by default `pod.mapsofmaking.org`), under `<pod>/crm/`.
+
+Built from [solid-kit](https://github.com/nicolasdb/solid-kit) at
+`d49c67c` (2026-11-17). The kit's own documentation follows further down.
+
+## What it does
+
+- **Contacts and organizations**, with tags and search. A contact can hold
+  emails, phones, a Matrix ID, a LinkedIn profile and a connection status.
+- **Timeline.** Log notes, emails, meetings, calls and chats on a contact,
+  organization or project. Logging on a person also lands on their
+  organization's timeline.
+- **Tasks and follow-ups** with due dates, attached to any record. "Today"
+  shows what's overdue or due this week.
+- **Pipeline** of projects and partnerships across stages you can rename,
+  reorder and extend (Settings). Move cards by drag and drop or with the stage
+  menu on each card.
+
+Coming next: Gmail (read and send), then Matrix. LinkedIn capture is built
+separately as a plugin.
+
+## Run it
+
+```bash
+npm install
+npm run dev            # http://localhost:5173 — sign in with your pod
+# or try it with sample data and no pod:
+open http://localhost:5173/?demo
+```
+
+`?demo` runs the whole app on invented sample data in memory. Nothing is read
+from or written to a pod, and it's gone on reload.
+
+## Where things are
+
+| Path | What |
+|---|---|
+| `docs/data-model.md` | Every record, predicate and document in the pod. Read this before writing to the pod from anywhere else. |
+| `src/crm/model.ts` | Record types and their RDF mapping. Pure; tested in `model.test.ts`. |
+| `src/crm/store.ts` | Reads and writes under `<pod>/crm/`. `DemoStore` is the in-memory twin. |
+| `src/crm/routes.ts` | Hash routes and the registry plugins add screens to. |
+| `src/crm/views/` | The screens. |
+| `src/crm/ui.ts` | Shared pieces: shell, fields, timeline, task list. |
+| `src/styles/crm.css` | The CRM layout, on the kit's tokens. |
+
+## Tests
+
+```bash
+npm run verify     # typecheck + unit tests + design audit
+# Against a real Solid server (in-memory, publicly writable):
+npx @solid/community-server -p 3000
+CSS_URL=http://localhost:3000/ npx vitest run src/crm/store.integration.test.ts
+```
+
+Signing in to a real provider is still checked by hand
+(`docs/manual-tests.md`).
+
+---
+
+# solid-kit (the base)
 
 The shared starting point for small apps that read and write a Solid pod.
 
