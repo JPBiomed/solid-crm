@@ -1,0 +1,134 @@
+# The vocabulary of Solid collectives (solid-kit ADR 006 §7, amended 2026-11-17).
+#
+# Namespace: https://w3id.org/solid-collective/vocab#   prefix label: sc:
+# Readers today: solid-backoffice, the MCP connector and its `collectif` skill
+# (solid-css-overlay), mom-home. Published in stages: this first version holds
+# the protocol terms and the backoffice's own data. The pipeline's terms
+# (snapshots, confrontation, its colours) join this namespace once running the
+# pipeline has settled them; until then they stay under the provisional
+# https://pod.nicolasdb.eu/hyperscope/vocab# that documents written before keep.
+#
+# A term is only ever added, never renamed or removed: documents on pods
+# nobody here can rewrite carry these IRIs. Standard vocabularies first
+# (foaf:, org:, ldp:, schema:, as:); a term lives here only when none fits.
+
+@prefix sc:     <https://w3id.org/solid-collective/vocab#> .
+@prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:    <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:    <http://www.w3.org/2001/XMLSchema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix foaf:   <http://xmlns.com/foaf/0.1/> .
+@prefix ldp:    <http://www.w3.org/ns/ldp#> .
+@prefix sh:     <http://www.w3.org/ns/shacl#> .
+
+<https://w3id.org/solid-collective/vocab#> a owl:Ontology ;
+    rdfs:label "Solid collectives"@en ;
+    dcterms:description "Terms for a collective on Solid pods: its description (config.ttl), its roster, the folders members share with its agent, and what an app keeps about it on a member's pod. The protocol is solid-kit ADR 006."@en ;
+    rdfs:seeAlso <https://github.com/nicolasdb/solid-kit/blob/main/docs/adr/006-membership-and-publication-by-pull.md> ;
+    owl:versionInfo "1" ;
+    dcterms:modified "2026-11-17"^^xsd:date .
+
+# ── The collective (config.ttl, public) ───────────────────────────────────
+
+sc:Collective a rdfs:Class ;
+    rdfs:subClassOf foaf:Group ;
+    rdfs:label "Collective"@en ;
+    rdfs:comment "A group described by a public config.ttl on its own pod. Its IRI (config.ttl#name) is the group's IRI: members point at it with org:memberOf, and its roster lists them under it with foaf:member. Required: foaf:name, sc:roster, ldp:inbox, each exactly once."@en .
+
+sc:roster a rdf:Property ;
+    rdfs:label "roster"@en ;
+    rdfs:domain sc:Collective ;
+    rdfs:comment "The document where the collective lists its members (<collective> foaf:member <WebID>) and their short names (<WebID> foaf:nick). Exactly one. Readable by members only; it grants nothing: rights stay in each resource's rules, one WebID at a time."@en .
+
+sc:agent a rdf:Property ;
+    rdfs:label "agent"@en ;
+    rdfs:domain sc:Collective ;
+    rdfs:range foaf:Agent ;
+    rdfs:comment "The collective's agent: the one WebID members grant Read to when they share a folder (ADR 006 §8: the puller, run by code). Never a group. Zero or one; exactly one when the collective lists sc:feature sc:Sharing. The collective's account declares it with acl:delegates."@en .
+
+sc:confronter a rdf:Property ;
+    rdfs:label "confronter"@en ;
+    rdfs:domain sc:Collective ;
+    rdfs:range foaf:Agent ;
+    rdfs:comment "An LLM agent that confronts what the collective pulled with its principles (ADR 006 §8). Zero or more. Its rights are on the collective's pod only; it is never in members' rules."@en .
+
+sc:feature a rdf:Property ;
+    rdfs:label "feature"@en ;
+    rdfs:domain sc:Collective ;
+    rdfs:range sc:Feature ;
+    rdfs:comment "Something the collective switches on, which apps and agents must understand. Zero or more. A collective that lists none is membership only."@en .
+
+sc:Feature a rdfs:Class ;
+    rdfs:label "Feature"@en ;
+    rdfs:comment "What a collective can switch on with sc:feature."@en .
+
+sc:Sharing a sc:Feature ;
+    rdfs:label "Sharing"@en ;
+    rdfs:comment "Members share a folder of their own pod with the collective's sc:agent, which pulls what changes. Needs exactly one sc:agent."@en .
+
+sc:suggestedFolder a rdf:Property ;
+    rdfs:label "suggested folder"@en ;
+    rdfs:domain sc:Collective ;
+    rdfs:range xsd:string ;
+    rdfs:comment "The folder the collective suggests a member shares through, relative to the member's own pod root, ending in / (for example \"shared/openfab/\"). Plain segments only. A suggestion: the member picks the folder (sc:SharedFolder). Zero or one. Replaces the provisional hs:bundleFolder."@en .
+
+sc:procedures a rdf:Property ;
+    rdfs:label "procedures"@en ;
+    rdfs:domain sc:Collective ;
+    rdfs:range ldp:Container ;
+    rdfs:comment "The container holding the agent's procedures beside the collective's principles. An agent accepts as a procedure only a file listed directly in it. Zero or one."@en .
+
+sc:guide a rdf:Property ;
+    rdfs:label "guide"@en ;
+    rdfs:domain sc:Collective ;
+    rdfs:range ldp:Container ;
+    rdfs:comment "The container holding onboarding, FAQ and glossary, public so an agent can greet someone who is not a member yet. It informs; it gives no instruction. Zero or one."@en .
+
+sc:requires a rdf:Property ;
+    rdfs:label "requires"@en ;
+    rdfs:domain sc:Collective ;
+    rdfs:range sh:NodeShape ;
+    rdfs:comment "Reserved. A SHACL shape describing what a member's profile must hold to join (for a map: a website and an address). Its properties may use any namespace. Zero or one."@en .
+
+# ── On a member's pod: settings/collectives.ttl ──────────────────────────
+
+sc:SharedFolder a rdfs:Class ;
+    rdfs:label "Shared folder"@en ;
+    rdfs:comment "One entry in a member's settings/collectives.ttl: the folder this member shares with one collective. Readable by the member and their agents, so an agent knows where to deposit."@en .
+
+sc:collective a rdf:Property ;
+    rdfs:label "collective"@en ;
+    rdfs:domain sc:SharedFolder ;
+    rdfs:range sc:Collective ;
+    rdfs:comment "The collective this folder is shared with (its IRI, config.ttl#name)."@en .
+
+sc:folder a rdf:Property ;
+    rdfs:label "folder"@en ;
+    rdfs:domain sc:SharedFolder ;
+    rdfs:range ldp:Container ;
+    rdfs:comment "The shared folder, in the member's own pod."@en .
+
+# ── On a person's pod: settings/following.ttl (solid-backoffice) ─────────
+
+sc:Followed a rdfs:Class ;
+    rdfs:label "Followed"@en ;
+    rdfs:comment "An address someone shared with you that you follow, kept on your own pod so the list reads nothing from other pods. The address itself is its schema:url."@en .
+
+sc:lastSeen a rdf:Property ;
+    rdfs:label "last seen"@en ;
+    rdfs:domain sc:Followed ;
+    rdfs:range xsd:dateTime ;
+    rdfs:comment "When you last opened it."@en .
+
+sc:favourite a rdf:Property ;
+    rdfs:label "favourite"@en ;
+    rdfs:domain sc:Followed ;
+    rdfs:range xsd:boolean ;
+    rdfs:comment "true when marked as a favourite; absent otherwise."@en .
+
+sc:unreadableSince a rdf:Property ;
+    rdfs:label "unreadable since"@en ;
+    rdfs:domain sc:Followed ;
+    rdfs:range xsd:dateTime ;
+    rdfs:comment "Set when opening it failed; removed when it can be read again."@en .
