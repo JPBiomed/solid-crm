@@ -1,0 +1,650 @@
+# ADR 006 — Membership and publication by pull
+
+**Status:** proposed; amended 2026-10-17 (§8: the pull runs as code, one
+puller, LLM agents apart, any format) and 2026-11-17 (§7: the namespace's
+address, published in stages, the agent optional) · **Applies to:** backoffice,
+collective pods (HyperScope first, then Maps of Making and networks), the
+MCP connector (solid-css-overlay), the collective's agents
+
+## Context
+
+A collective (HyperScope today, a fablab network or a Maps of Making region
+tomorrow) has a common pod. Members work on their own pods and want some of
+that work to reach the common pod. They also want their teammates and the
+collective's agent to be able to read it, confront it with the collective's
+principles, and bring it back into later sessions.
+
+The first design, worked out on 2026-09-23 for Phase 0, was **push**. A
+member's agent copied a report into `hyperscope/depots/`, holding an Append
+grant there so that nobody could overwrite anyone else's deposit. It broke down
+in three places:
+
+- **It violated the single-writer invariant.** pocpod0 `architecture.md` BP-6
+  says only your own agent writes your pod, and everything else is a grant you
+  hold on someone else's pod. Push made every member's agent a writer on the
+  common pod.
+- **Append-only was a workaround, not a guarantee.** WAC Append was never
+  verified against CSS for a create by PUT. The backoffice had no UI for it, and
+  "correct it by depositing a v2" was a rule people would have had to remember.
+- **Consent sat on the wrong pod.** The act of sharing was a write to someone
+  else's pod, so nothing on the member's own pod recorded it.
+
+Two other facts shaped the decision:
+
+- **Membership needs two sides.** Xavier's WebID is `chabivdb` and his agent is
+  `bridget`. Nothing ties either name to "Xavier", or Xavier to HyperScope,
+  without a declaration from him *and* a recognition from the collective.
+- **Revoking works forward only.** It stops future reads. It never un-reads or
+  un-copies anything. This was misunderstood repeatedly, and it is also the
+  rule solid-dash settled on (PRD FR-26).
+
+## Decision
+
+### 1. The member publishes; the collective pulls
+
+The member's pod is the source of truth. **Publishing means granting the
+collective's agent Read on a resource or container, then announcing it.**
+Nothing is ever written into the common pod by a member.
+
+1. **Grant.** On their own pod, the member gives the collective's agent WebID
+   `acl:Read` on the bundle. That grant *is* the act of consent: it is visible
+   on the member's pod and revocable there.
+2. **Announce.** The member (or their app) sends an `as:Announce` to the common
+   pod's `inbox/`, with the bundle's URI as `as:object`.
+3. **Pull.** The collective's agent fetches the bundle and stores a snapshot
+   (§3). It is the only writer of `depots/`. Since §8, this agent is the
+   puller, and the pull is code, not an LLM following steps.
+4. **Follow.** The agent subscribes to changes (§4). A new ETag produces a new
+   snapshot, and a new confrontation runs against it. There is no "v2" deposit:
+   editing your own document *is* the new version.
+5. **Stop** (added 27 Sep 2026, from solid-backoffice). The member removes
+   the grant, then sends an `as:Undo` to the same `inbox/`, whose
+   `as:object` is the announcement described in place
+   (`[ a as:Announce; as:object <bundle>; as:target <group> ]`): the member
+   does not know where the collective stored the original. Per member and
+   bundle, the latest `as:Announce` or `as:Undo` (by `as:published`) says
+   whether it is shared, so share, stop and share again read right. Like a
+   notification (§4), the Undo is a trigger: the missing grant is the
+   truth, and the next pull marks `access-revoked` (§3) with or without it.
+
+**A bundle is whatever URI the member points at**, whatever its shape:
+
+- a single Turtle document, such as a solid-dash Bundle;
+- a JSON or Markdown file;
+- a container such as `output2/hyperscope/`, where everything inside is part
+  of the bundle. One folder per collective under a private `output2/`, so a
+  member of several collectives grants each agent its own folder only.
+
+A container is the easiest shape to use day to day: set its grant once, then
+drop files into it. The collective discovers new files through container `Add`
+notifications.
+
+### 2. Membership is a handshake, read from both sides
+
+- **The member declares.** Their profile carries `foaf:name`,
+  `org:memberOf <collective IRI>`, and `acl:delegates <agent WebID>`. The
+  collective IRI is the subject of its `config.ttl` (`config.ttl#hyperscope`),
+  so following the link from a profile leads to the collective's description. The
+  agent's profile points back at the human. A claim made from one side only
+  proves nothing.
+  *Not built yet (27 Sep 2026, from solid-backoffice slice D):* the agent's
+  side of this handshake is deferred. The backoffice makes agents at
+  `<pod>/profile/<name>#me` on the member's own pod, so the agent's address
+  already says whose it is, and nothing reads a back-link yet. It becomes
+  worth writing (e.g. `prov:actedOnBehalfOf <human WebID>` in the agent's
+  document, kept in step with `acl:delegates`) once a reader checks
+  attribution before crediting a member, or for an agent that lives
+  elsewhere (its own pod, another provider).
+- **The member asks.** An `as:Join` is sent to the collective's `inbox/`.
+- **The collective recognises.** An admin accepts and writes
+  `<config.ttl#hyperscope> foaf:member <WebID>` into the collective's
+  `membres.ttl`, then sends an `as:Accept` (or `as:Reject`) to the member's
+  inbox. The roster holds only what the collective decides: `foaf:member`,
+  and the `foaf:nick` it files each member's work under in `depots/`. Names
+  and agents are read from each member's profile, so there is one source for
+  each fact and nothing in the roster goes stale.
+
+The state is **read, not stored**. It follows from which side declares what:
+
+| Member declares `memberOf` | Collective lists `foaf:member` | State |
+|---|---|---|
+| yes | yes | member |
+| yes | no | request pending (or refused) |
+| no | yes | left: the member withdrew |
+| no | no | not a member |
+
+Either side can end membership on its own, without asking the other.
+
+**Membership grants nothing.** `membres.ttl` is descriptive, and permissions
+stay per-WebID ACLs. Accepting a member and writing their ACLs are two
+separate writes that leave two separate traces, even when the backoffice
+chains them behind one click. Never use `vcard:Group` or `foaf:Group` as an
+ACL subject: ACP ignores it silently, and the WAC→ACP move would then drop
+access without a single error.
+
+What membership *does* switch on is behaviour. When a member publishes, the
+collective accepts the `as:Announce` and follows the bundle. Announcements
+from non-members wait for a human.
+
+### 3. Snapshots are copies, kept as they were
+
+The collective keeps a copy, never only a link. A confrontation must refer to
+the exact text it judged. A link could change after the judgement, or vanish.
+
+- Path: `depots/<member-slug>/<file-slug>/<pull time, UTC>/`, one folder
+  per file (amended 2026-10-17; first written as
+  `<bundle-slug>/<published>-<etag>/`, which the pull procedure never used:
+  a bundle is a container of files that change one by one, and CSS's ETag
+  says nothing the time does not, see Live evidence). It holds the
+  original bytes unchanged, plus a `provenance.ttl` that records the source URI,
+  source keys, a hash of the bytes, fetch time, the fetching agent, the
+  member it is attributed to, and the Announce that triggered the fetch.
+- **Snapshots are never rewritten or deleted by the pull.** If the source
+  disappears (404) or access is revoked (401/403), the next snapshot is not
+  taken and the bundle is marked `source-gone` or `access-revoked`. Earlier
+  snapshots stay. That is what revocation means (see Context).
+- **A deleted source file is marked, not mirrored.** When a file disappears
+  from a followed container (`Remove`, or missing from the next listing), the
+  bundle's record marks that file `source-gone`; its snapshots stay. This is
+  not a breach of [ADR 001](001-index-vs-truth.md) rule 4 (deletion
+  propagates): a snapshot is the collective's own record, taken with the
+  member's consent, not an index of the member's pod. Its own deletion, if
+  ever, is the retention rule below.
+- **Derived text is an index, not truth.** A `.docx` is kept as a `.docx`. The
+  Markdown or plain text extracted from it for the agent and for oxigraph is
+  derived and rebuildable ([ADR 001](001-index-vs-truth.md)). If it is stored
+  beside the snapshot, it is named so it cannot be mistaken for the original.
+  How it is made and named: §8.
+
+#### Versions (proposed)
+
+A change to a file means a new snapshot of **that file only**, fetched whole
+(HTTP has no partial read of a change); unchanged files are skipped from the
+container listing. The checks run again on the new snapshot. Three rules keep
+the number of versions sane:
+
+- **Only when the bytes changed.** The agent hashes what it fetched and takes
+  no snapshot if the hash equals the last one. CSS's ETag cannot be used for
+  this: it holds no content hash (see Live evidence).
+- **Only once the file has settled.** A change is snapshotted after the file
+  has been quiet for a while, so a series of saves gives one version. The
+  delay is set per collective in `config.ttl`.
+- **Retention is a separate task, never the pull.** A snapshot that a
+  confrontation refers to is kept for good. Others beyond the last *n* per
+  file may be pruned by a scheduled task, with *n* set in `config.ttl`.
+
+Git is not needed: snapshots under `<published>-<etag>/` already form a
+linear history with a single writer, and git's branches and merges answer a
+problem this design does not have. If members need to compare versions, that
+is a diff view over two snapshots.
+
+#### Status (proposed)
+
+Each snapshot folder holds, beside the original file and `provenance.ttl`, a
+`status.ttl` written by the collective's agent: one entry per event
+(`collected`, `reviewed`, `flagged`, `error`), each with its time and, for a
+review, the confrontation it came from. Entries are added, never rewritten.
+This works for any file type, since nothing is written into the file itself.
+
+For reading at scale, the agent also keeps `depots/<member>/index.ttl`: per
+source file, its latest snapshot and latest status, plus `source-gone` when
+it applies. It is derived and rebuildable from the snapshot folders, and it
+lets a member's backoffice or agent see everything with one read. Queries
+across members go to oxigraph, which indexes one named graph per snapshot and
+marks the latest; apps never read oxigraph ([ADR 001](001-index-vs-truth.md)
+rule 5).
+
+### 4. Change detection: a notification is a trigger, never data
+
+CSS 7 implements the Solid Notifications Protocol, and pocpod0's config imports
+`css:config/http/notifications/all.json`. The puller subscribes with a
+`WebhookChannel2023` whose `sendTo` is a route on the MCP connector, which
+runs the pull itself (§8; first written as "the Hermes webhook", when the
+pull was to be an LLM task on Hermes).
+
+Properties from the CSS documentation that this design relies on:
+
+- **Subscribing needs Solid-OIDC and Read on the topic.** The member's grant
+  (§1.1) is exactly what lets the agent subscribe. Revoking it also ends the
+  agent's ability to subscribe again.
+- **A container topic emits `Add`/`Remove`; a resource topic emits
+  `Create`/`Update`/`Delete`.** Each notification carries `state`, which is the
+  new ETag and therefore the diff key for §1.4 at no extra cost.
+- **CSS removes channels after 14 days by default** (`maxDuration`). The agent
+  must re-subscribe before then, or the server's `maxDuration` must be changed.
+  Either way it is a scheduled task, not a one-off.
+- **CSS signs webhook requests** with a DPoP-style token issued under the
+  server's own WebhookWebId.
+
+**The agent never trusts the body of a notification.** A notification only
+makes the agent GET the bundle with its own credentials. That GET is the
+authority: it gets the content, the ETag and the access decision. A forged or
+replayed webhook can therefore cause, at worst, one unnecessary GET. Checking
+the signature is defence in depth, not the security boundary.
+
+**Polling is the fallback, not a second design.** A scheduled pass
+(conditional GET with `If-None-Match` on every followed bundle) covers two
+cases: providers that do not implement notifications, and notifications lost
+while the connector was down. The webhook makes changes quick to arrive; the poll
+makes sure none is missed.
+
+### 5. Who holds which rights on the common pod
+
+| Container | Members and their agents | Puller (`hs:agent`) | Confronters (§8) | Owner (admin) |
+|---|---|---|---|---|
+| `inbox/` | Append (authenticated agents, members or not) | Read | — | Control |
+| `depots/` | Read | Read, Write | Read | Control |
+| `confrontations/`, `chantiers/`, `briefs/` | Read | Read | Read, Write | Control |
+| `principles/`, `membres.ttl` | Read | Read | Read | Control; writes after ceremony or acceptance |
+| `config.ttl` | Read (public) | Read | Read | Control |
+
+Split in two columns on 2026-10-17 (§8); before, one collective agent held
+both. Other agents of the collective (a chat bot, for instance) get what
+their audience may see, often `public/` only, and are not in this table.
+
+`config.ttl` is the exception to "members only": it is how an applicant
+learns where the inbox is and which agent to grant, so it is read *before*
+membership, and the backoffice's welcome screen reads it before sign-in. It
+is public (`foaf:Agent`), as it holds nothing secret. Its shape is defined by the backoffice
+(`solid-backoffice`, `docs/examples/hyperscope-config.ttl`): the group IRI,
+the inbox, the agent and the bundle folder name.
+
+Each WebID is listed by name in every ACL, as §2 requires. Accepting a member
+therefore also means adding their WebID to the Read grants above; until then,
+the roster is unreadable to them, and the backoffice shows their state as
+"pending", never as "refused". No member holds
+Write anywhere on the common pod. Append on `depots/` is no longer needed,
+which removes the unverified CSS behaviour from the critical path.
+
+### 6. The collective's graph (added 2026-09-29)
+
+What the pull and the confrontation wrote is loaded into Oxigraph, as a
+derived index (ADR 001), so that members' agents can draw on the
+collective's work in their own conversations.
+
+- **What goes in**: the Turtle under the collective's `depots/` and
+  `confrontations/`, one named graph per document, named by its pod
+  address. `provenance.ttl` says who and when; the confrontation's sidecar
+  (`procedure-confrontation.md` v2) says what the document is about
+  (`dcterms:subject`, shared SKOS topics in `confrontations/sujets.ttl`),
+  what it builds on (`prov:wasDerivedFrom`, from the member's
+  `s-appuie-sur:`) and what the confrontation found. Markdown never goes in:
+  its sidecar does.
+- **Who loads it**: the puller only (`hs:agent`), with its own
+  credentials, so the pod's rules decide what it can load
+  (connector `graph_ingest`). Since §8, by code, after each confrontation,
+  not by the LLM that confronted.
+- **Who reads it**: a member on the roster, or an agent a listed member
+  declares (`acl:delegates`), read-only, over the folders that WebID can
+  read on the pod at that moment (pocpod0 `graph_query`). The index never
+  shows more than the pod. So accepting a member grants their agents the
+  same Read (solid-backoffice slice E).
+- **Isolation**: Oxigraph has no access control; it is reachable only from
+  the connector and the host's loopback. The SPARQL protocol dataset holds
+  a query to the caller's graphs against `FROM`, `FROM NAMED` and
+  `GRAPH <iri>`; `SERVICE` escapes it (Oxigraph federates, and can query
+  itself), so queries are parsed, `SERVICE` and updates refused, and the
+  regenerated text sent. Verified on Oxigraph 0.5.6.
+
+Open: what leaves the graph when a member leaves (their snapshots stay,
+§3); whether the sidecar's topics hold up across model changes (a
+reference set of documents, confronted again when the model changes).
+
+### 7. Vocabularies: one generic, one per collective (added 2026-10-10)
+
+Proposed while setting up Maps of Making, the second collective, which
+showed the provisional `hs:` namespace for what it is: HyperScope's pod
+naming a vocabulary every collective must use.
+
+**The generic namespace** is
+`https://w3id.org/solid-backoffice/vocab#`. It names the mechanism, not a
+collective or a host:
+
+- a permanent w3id redirect (a pull request to `perma-id/w3id.org`), to a
+  `vocab.ttl` kept in the solid-backoffice repo and served wherever it is
+  deployed: moving domains or pods changes the redirect, never the IRI;
+- **one namespace for all its current uses**: the collective protocol
+  (`Collective`, `roster`, `agent`, `bundleFolder`, `procedures`, `guide`,
+  `requires`), the backoffice's own data (`Followed`, `lastSeen`,
+  `favourite`, `unreadableSince` in each user's `settings/following.ttl`)
+  and the pipeline's (`declareePar`, `statut`, `remplaceePar`, the
+  confrontation colours). Splitting protocol from app was considered and
+  left out: two renames for an ownership line nobody needs to draw yet;
+- the prefix label is free; new documents write `sb:`. A label is not part
+  of the data, so `hs:` in an old document still reads right as long as it
+  is bound to the new IRI.
+
+**A collective's own namespace** holds the terms only that collective
+means. It is optional, declared by the collective, and never needed by the
+backoffice or the procedures to work:
+
+- **where**: on an IRI the collective controls and can keep when it moves,
+  its own domain or w3id (`https://w3id.org/mapsofmaking/vocab#`), not a
+  pod path. Its terms end up in members' documents, which the collective
+  cannot rewrite when its pod moves;
+- **what**: the fields it asks of its members beyond the generic ones, and
+  the terms of its own documents. Standard vocabularies first (`foaf:`,
+  `schema:`, `vcard:`, `org:`); a collective term only when none fits;
+- **how it is asked**: through the generic `sb:requires <member-shape.ttl>`
+  (reserved since the first `config.ttl`), a SHACL shape whose properties
+  may use any namespace. The backoffice shows what the shape asks (with its
+  `sh:name` and `sh:description`) and checks a request against it; it
+  never needs to understand a collective term to do so.
+
+**Features are generic terms.** What a collective switches on is something
+the backoffice and the agents must understand, so it is named in the
+generic namespace: `sb:feature sb:Sharing` (members share a folder with
+`sb:agent`), later `sb:Graph` and others. A collective that lists no
+`sb:feature` keeps today's behaviour, sharing on. Membership only (Maps of
+Making at its start) lists none of them, and then `sb:agent` is optional:
+today the backoffice requires it, and a collective with no agent has to
+name one that does not exist yet.
+
+**Migration**, mechanical but across several places:
+
+1. Register the w3id redirect and publish `vocab.ttl` (every term above,
+   with `rdfs:label` and `rdfs:comment`).
+2. solid-backoffice: `src/lib/vocab.ts` moves to the new IRI; parsers of
+   `config.ttl` and `following.ttl` accept both IRIs for a while, writers
+   use only the new one, so `following.ttl` is rewritten on its next save.
+3. The `config.ttl` of each collective (two today) is edited by its
+   owner; the template here, the examples and the procedures follow, the
+   procedures by ceremony (a new version each).
+4. Snapshots stay as they were (§3): the graph and the procedures read the
+   old IRI in documents written before the change, without rewriting them.
+
+Not built. Open: whether `sb:requires` fields live in the member's public
+profile or in a document they grant the collective Read on (a field a
+collective asks for is not always public); how a request is refused against
+a shape (an `as:Reject` naming what is missing).
+
+#### §7 amended 2026-11-17: the address, in stages, the agent optional
+
+Decided by Nicolas while reviewing how a collective is created (OpenFab, a
+fablab on Maps of Making), before anything was migrated. This supersedes the
+paragraphs above where they differ.
+
+- **The address is `https://w3id.org/solid-collective/vocab#`**, prefix
+  label `sc:`. It names the mechanism, not an app: the backoffice, the MCP
+  connector and its `collectif` skill, and mom-home all read these terms.
+  `w3id.org/solid-backoffice/` would have tied the protocol to one of them.
+  w3id is a permanent-redirect service run by a community (a pull request
+  to `perma-id/w3id.org`), not a W3C registration; none is needed.
+- **`vocab.ttl` lives in this repo**, [`docs/vocab/vocab.ttl`](../vocab/vocab.ttl),
+  beside this ADR, not in solid-backoffice: the backoffice is one reader of
+  three. The w3id rule sent for the pull request is in
+  [`docs/vocab/w3id/`](../vocab/w3id/). No code dereferences the
+  namespace, so the migration does not wait for the redirect.
+- **Published in stages, one namespace.** The first `vocab.ttl` holds the
+  protocol terms and the backoffice's own data, which are settled. The
+  pipeline's terms (`declareePar`, `statut`, `instantane`, the confrontation
+  colours…) join the same namespace once running the pipeline with
+  OpenFab and HyperScope has settled them: adding a term is not a rename,
+  and a permanent address should not freeze names still being tried.
+  Until then they stay under the old `hs:` IRI, in the procedures and the
+  documents they write.
+- **Two names fixed while they are still cheap to fix:**
+  - `hs:bundleFolder` becomes **`sc:suggestedFolder`**: since
+    solid-backoffice slice G (16 Oct 2026) the member picks the folder, and
+    this is only the collective's suggestion.
+  - **`sc:agent` is optional.** A collective declares what it switches on
+    with `sc:feature`; **`sc:Sharing`** (members share a folder with the
+    agent) needs exactly one `sc:agent`. Without `sc:Sharing`, a
+    collective is membership only: no agent is required, no sharing is
+    offered, and accepting grants members Read on the roster alone. This
+    replaces "a collective that lists no `sb:feature` keeps today's
+    behaviour" above for documents in the new namespace.
+- **Old documents keep working.** A `config.ttl` in the old namespace is
+  read as before: its `hs:agent` and `hs:bundleFolder` are required, and
+  sharing is on. Parsers read both namespaces; writers write only `sc:`.
+- **Migration order:** (1) `vocab.ttl` and this amendment; (2) the
+  backoffice and the connector read both IRIs and the new terms, the
+  backoffice writes `sc:` in `settings/collectives.ttl` and
+  `settings/following.ttl` on their next save; (3) the template, the
+  procedures (a new version each, by ceremony) and the `collectif` skill;
+  (4) the w3id pull request; (5) each existing `config.ttl` edited by its
+  owner (HyperScope, Maps of Making). A new collective (OpenFab) starts in
+  `sc:` and is never migrated.
+
+### 8. The pull runs as code; LLM agents stay on the collective's pod (added 2026-10-17)
+
+**Why.** Until now the pull was an LLM following `procedure-pull.md`: it
+read each file and wrote it back, so the bytes went through the model.
+Xavier's first shares (`.docx`, `.pdf`, pictures, Markdown exported from
+Google Docs with base64 images) showed the three ways that breaks: the
+connector reads as text, so a binary comes back corrupted; a tool call's
+body is capped near 100 kB, so a large file cannot be written back; and a
+several-MB file floods the model's context before that. Rewording the
+procedure fixes none of it. The bytes must not go through the LLM.
+
+**Two roles, two kinds of identity.** One WebID per agent, never shared by
+two agents (each visit then reads plainly in an access log).
+
+- **The puller** is `hs:agent` in `config.ttl`: exactly one, the only WebID
+  members grant Read to (§1.1). **Only code uses it**, in the MCP
+  connector: copy, extract, load the graph. Its every action is directed (an
+  action, a source, a target), so a document cannot steer it: no model reads
+  what it fetches. It is a WebID of its own, delegated by the collective's
+  account; never the account itself, which holds Control over the common
+  pod and could rewrite `config.ttl`, the rules and the principles if the
+  connector were compromised. Its `foaf:name` says its role
+  (`HyperScope·pull`). For HyperScope it stays `agents/agent#me`, so
+  members' grants hold as they are.
+- **LLM agents** (Claude for the admin, a Hermes bot on Discord, a
+  confronter on a schedule) each have their own WebID, delegated by the
+  collective's account, with rights **on the common pod only**, given by
+  its admin for each agent's audience (§5). They are never in members'
+  rules. Those that confront are declared in `config.ttl` as
+  `hs:confronter` (zero or more; `sc:confronter` once §7 lands), so the
+  skill can check its role. Changing or adding one asks nothing of members.
+
+**Why not several WebIDs in members' rules.** Considered, for a collective
+running a controlled agent and an open one:
+
+- *exposure*: an agent talking to people outside the collective (a bot on a
+  public channel) holding Read on members' folders can be led, by a message
+  or a planted document, to repeat their contents to non-members;
+- *consent*: sharing answers "who can read this?"; the answer must be one
+  named identity, not a list that may change afterwards;
+- *drift*: `config.ttl` can change, the rules already written on each
+  member's pod do not follow; every change would need every member to share
+  again, and a forgotten rule keeps its access. The backoffice already
+  requires exactly one `hs:agent`.
+
+**The pull, as code.** A connector feature acting as the puller:
+`solid_snapshot(source, target)` GETs with the puller's credentials and PUTs
+the same bytes with the same `Content-Type`; the pull (announcements,
+membership on both sides, listing, keys, snapshot, `provenance.ttl`,
+report) runs on it, exposed as a tool so an admin can run it by hand and
+callable by the webhook (§4) with no model at all. It hashes the bytes,
+which is what "only when the bytes changed" (§3) needed. The procedure
+becomes the specification of that code and the guide to its report.
+
+**Derived text, made at snapshot time.** The same code, in the same pass,
+writes `<file>.texte.md` beside the original; also a tool, to redo one or
+to backfill older snapshots. Extractors run in the connector's image:
+
+| Source | Derived text |
+|---|---|
+| `.md`, `.txt` | as is, each `data:` URI replaced by `[image: <alt>, <type>, <size>]` |
+| `.docx`, `.odt` | pandoc |
+| `.pdf` | pdftotext; a scan with no text is marked, never guessed |
+| images | none: the confronter is shown the image itself (MCP image content), up to a size cap, and the snapshot is marked |
+| anything else | none; snapshotted, marked `format-non-lu`, never refused silently |
+
+`provenance.ttl` links them both ways:
+`<original> hs:texte <original.texte.md>` and
+`<original.texte.md> prov:wasDerivedFrom <original>`.
+
+**No size cap on the pull.** Code streams the bytes from GET to PUT; no
+model holds them. The limit that remains is the confronter's reading (see
+below), and the space on the common pod, which is the collective's own
+choice, not this protocol's.
+
+**An extraction says how it went.** It records, in `status.ttl` (§3), the
+tool and its version, its exit status and warnings, and what can be
+measured (pages in the PDF against pages with text, characters, `data:`
+URIs left). Three outcomes:
+
+- `texte-complet`;
+- `texte-partiel`, with what is missing (pages 12 to 40 have no text, a
+  table pandoc could not read). Incomplete is not always detectable; these
+  measures catch the common cases, and the confronter, reading the text,
+  can mark it partial too;
+- `texte-echec`: no usable text.
+
+**Confrontation starts when the pull is done, never earlier.** The pull
+runs to its end (snapshots, then derived text, then status), and only then
+calls the confronter, with the list of snapshots it made. The confronter
+takes a snapshot whose status is `texte-complet`, `texte-partiel` or an
+image; it confronts a partial text and says so in its report, as a 🟧 on
+the reading itself, with what was missing. It never confronts
+`texte-echec` or a snapshot without a status: those appear in the pull
+report for the admin. The extraction tool is there for those cases, and
+for an "accident" (a pull stopped before its extraction): run again on one
+snapshot, or on all older ones once an extractor is fixed. The original is
+never touched; the derived text is rebuilt (ADR 001).
+
+**A confrontation names the text it read**: the derived text's address and
+its hash. A new extraction that changes the text leaves earlier
+confrontations as they were, marked as made on an earlier reading, and puts
+the snapshot back among those waiting.
+
+**A long text is read in parts.** A confronter has a context, so a text
+larger than it can read at once is confronted part by part (by heading, or
+by page), and the report covers the whole and says it was read in parts.
+Never truncated silently.
+
+**What the graph points at, and who wrote it.** The subject of a
+confrontation's sidecar is the **original in its snapshot** (the `.docx`),
+not the derived text: the original is what was shared, cited and
+downloaded; the text is how it was read. A reader gets both addresses. The
+author is `dcterms:creator`, the **member's** WebID, taken from
+`prov:wasAttributedTo` in `provenance.ttl`, which the pull fills from the
+announcement: when a member's agent announced, the pull follows
+`acl:delegates` in the member's profile back to the member. An agent is
+never credited as author.
+
+**Where each part lives.**
+
+| Layer | What | Where |
+|---|---|---|
+| tools (MCP) | `solid_snapshot`, the text extraction, `graph_ingest`, `graph_query` | the connector |
+| pipeline, code | announcement → pull → derived text; after a confrontation → graph | the connector, triggered by webhook, with the scheduled pass behind |
+| procedures and skill, LLM | confrontation; a member's contribution; reading a pull report | `mcp-connector/procedures/`, `skills/collectif/` |
+
+The LLM is left one job, confrontation, because judging a text against
+principles needs reading. Steps, order and what is deferred:
+solid-css-overlay
+[`mcp-connector/docs/collective-pipeline.md`](https://github.com/nicolasdb/solid-css-overlay/blob/main/mcp-connector/docs/collective-pipeline.md).
+
+Not built. Open: the size of a part when a long text is read in parts, set
+from the first real backlog.
+
+## Consequences
+
+- **A member onboards with one grant.** They grant the collective's agent Read
+  on `output2/hyperscope/`. This happens on their own pod, in their own
+  backoffice, and becomes a step in the onboarding path.
+- **The pull must run somewhere that listens.** In the MCP connector (§8):
+  a reachable webhook, the 14-day re-subscribe task and the polling
+  fallback. Until it exists, a pull triggered by hand from a claude.ai
+  session with the same identity is a valid stopgap, because the protocol
+  does not care who triggers the GET; it carries text only.
+- **One identity, one use.** The WebID that pulls is the WebID members
+  grant to, and only code uses it. Retire the claude.ai connector
+  (`hyperscopeMain`) when the pull runs as code, so that a member's access
+  log can read every visit of that WebID as a pull.
+- **The backoffice needs several pods, not a push button.** It must read the
+  common pod, and pods where a teammate granted you something (the Xavier
+  case), with your own WebID. That is a list of places, not a publishing
+  flow. For binary files, the minimum is download; online preview is not
+  required.
+- **This is the same loop as solid-dash, one level up.** A solid-dash Bundle
+  granted to the collective's agent is a bundle in this ADR's sense. The
+  solid-dash Request Box and this `inbox/` both use Append-by-anyone-
+  authenticated.
+- **A deposit is not the same as a publication.** A snapshot on the common pod
+  is readable by members only. Making anything public from it is a separate
+  decision, taken with the collective's own threshold mechanism.
+- **Consent covers what the grant covers.** If a member grants a container,
+  every file they later drop in it is published, which is the convenience and
+  also the risk. The onboarding copy must say so in one line, as plainly as
+  solid-dash says that revoking is forward-only.
+
+## Live evidence
+
+**2026-09-24: manual pull and confrontation, end to end.** The source was
+`hyperscope_ndb/output2hyperscope/` on the member's pod, with Read granted to
+`agent#me`. From a claude.ai session using `hyperscopeMain`, one `.md` file
+was pulled into `hyperscope/depots/`. The confrontation procedure then wrote
+its report into `confrontations/` with a 🟧 flag, and `depots/` was left
+untouched. The grant, the pull, the single writer and the confrontation all
+held.
+
+What the manual run did *not* yet do, and the next run must do:
+
+- It wrote the file flat into `depots/`, keeping its original name, with no
+  `<member>/<bundle>/<published>-<etag>/` path and no `provenance.ttl`.
+  Without the source ETag, the next pull cannot tell whether anything changed.
+- It was triggered from chat, with no `as:Announce` in `inbox/`.
+- The pull steps were improvised. The confrontation already had a written
+  procedure; the pull needs one too, and that procedure is also the
+  specification for the Hermes task.
+
+The procedures now live beside the connector, in solid-css-overlay's [`mcp-connector/procedures/`](https://github.com/nicolasdb/solid-css-overlay/blob/main/mcp-connector/procedures/README.md) (moved from this repo on 2026-10-16).
+
+**2026-09-24, later that day: change detection.** After the connector began
+returning version metadata (pocpod0 `de537b9`), the pull ran twice in a row.
+The first run snapshotted both files under `depots/nicolas/`, with real keys.
+The second run found both keys unchanged and wrote nothing. CSS 7 does include
+`dcterms:modified` and `posix:size` for each child in a container listing, so
+a pull can skip unchanged files without reading them, and without leaving a
+read receipt on the member's pod.
+
+A finding from that run: CSS's ETag has the form `"<mtime-ms>-<content-type>"`.
+It contains no content hash and not even the size. On CSS it carries the same
+information as `modified`. The agent matched a stored ETag against a listed
+`modified` by decoding that format. It worked, but it depends on an
+implementation detail. The procedure now records both keys and only ever
+compares keys of the same kind.
+
+**2026-10-01: generic procedures and the collectif skill, both directions.**
+Two claude.ai projects, one connector each. As the common agent (role read
+from `hs:agent`, delegation from the collective account's profile,
+procedures from `hs:procedures`): pull v2 snapshotted 3 documents, marked
+two removed members' sources `membre-retire` and a 6 MB PNG
+`binaire-en-attente`; confrontation v3 flagged the 3 🟧 and the graph loaded
+26 of 26 documents. As a member's agent: a `graph_query` led to a new
+document, written to the shared folder only after confirmation; the next
+pull and confrontation brought it back into the graph linked to its three
+`s-appuie-sur` sources. Every connector wrote only where its role allows.
+
+What the run did *not* show: two members. All documents have one author, so
+the cross-member queries return nothing; stigmergy between people is still
+untested. Defects and the procedure changes it suggests are in the
+[procedures README](https://github.com/nicolasdb/solid-css-overlay/blob/main/mcp-connector/procedures/README.md#proposed-not-adopted).
+
+## Open, and to verify live before relying on it
+
+- The settle delay, the retention count and which statuses exist: proposed
+  in §3, to be set from the first real use.
+
+- Whether webhook channels survive a CSS restart with our
+  `storage/key-value/resource-store.json` config. If they do not, the polling
+  fallback carries the gap until the next re-subscribe.
+- Whether a container channel emits for changes inside nested sub-containers.
+  If it does not, a bundle container is flat or is followed one level at a
+  time.
+- Where `as:Accept` lands when the member's pod has no `ldp:inbox`. The
+  onboarding path should create one.
+- Whether `acl:delegates` is still the right predicate for human → agent, or
+  whether a newer term has replaced it.
+- The agent → human back-link of §2: which predicate, and who first needs to
+  read it. Deferred by solid-backoffice slice D (27 Sep 2026).
+- The `hs:` namespace (`https://pod.nicolasdb.eu/hyperscope/vocab#`) is
+  hosted on one collective's pod but used by all of them. Decided in §7
+  (amended 2026-11-17): `https://w3id.org/solid-collective/vocab#`, and a
+  namespace per collective for its own terms. Until the migration runs, the
+  procedures say never to replace it
+  ([procedures README](https://github.com/nicolasdb/solid-css-overlay/blob/main/mcp-connector/procedures/README.md#open)).
