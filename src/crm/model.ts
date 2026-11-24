@@ -55,8 +55,14 @@ export interface Contact extends RecordBase {
   links: string[];
   tags: string[];
   note: string;
-  /** Where the record came from: "manual", "linkedin", "gmail", "matrix"… */
+  /** Where the record came from: "manual", "linkedin", "gmail", "google", "matrix"… */
   source: string;
+  /**
+   * Ids of this person in other systems, as `<system>:<account>:<id>`, e.g.
+   * `google:jane@gmail.com:people/c123`. Lets an import recognise someone it
+   * brought in before, even after their name or email changed on either side.
+   */
+  externalIds: string[];
 }
 
 export interface Organization extends RecordBase {
@@ -228,7 +234,7 @@ export function emptyContact(): Contact {
   return {
     id: "", name: "", emails: [], phones: [], role: "", orgs: [], linkedin: "",
     linkedinStatus: "", connectedOn: "", matrixId: "", links: [], tags: [], note: "",
-    source: "manual",
+    source: "manual", externalIds: [],
   };
 }
 
@@ -247,6 +253,7 @@ export function contactToThing(c: Contact, now = new Date()): Thing {
   for (const t of c.tags) b = b.addStringNoLocale(SCHEMA("keywords"), t);
   if (c.note) b = b.addStringNoLocale(VCARD("note"), c.note);
   if (c.source) b = b.addStringNoLocale(DCT("source"), c.source);
+  for (const x of c.externalIds) b = b.addStringNoLocale(SCHEMA("identifier"), x);
   return b.build();
 }
 
@@ -269,6 +276,7 @@ export function thingToContact(t: Thing): Contact | null {
     tags: strs(t, SCHEMA("keywords")),
     note: str(t, VCARD("note")),
     source: str(t, DCT("source")),
+    externalIds: strs(t, SCHEMA("identifier")),
   };
 }
 
