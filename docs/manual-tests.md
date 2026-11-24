@@ -285,3 +285,10 @@ And two from the laws the kit follows without a machine check
   — WebID, pod URL, with or without a trailing slash?
 
 See [`ux-principles.md`](ux-principles.md) for where these come from.
+
+## LinkedIn capture (needs a real phone and a deployed CRM)
+
+- Android: install the CRM from Chrome, share a profile from the LinkedIn app to it. The form opens with the profile link, the name when the share text has it, and status Interesting. Do it once signed out too: after signing in, the form still opens.
+- iPhone: build the Shortcut from the steps on `#/linkedin`, share a profile to it. Same result.
+- Computer: drag the bookmarklet to the bookmarks bar and use it on a profile. Name and headline are filled in.
+- Share someone already in the CRM: their contact page opens and no duplicate is made.

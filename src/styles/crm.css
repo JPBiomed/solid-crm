@@ -355,3 +355,55 @@ a.crm-tag:hover { color: var(--text-primary); }
   .crm-facts dd { margin-bottom: var(--space-2); }
   .crm-board { grid-auto-columns: 85%; }
 }
+
+/* ── LinkedIn plugin ────────────────────────────────────── */
+
+.linkedin-add { align-items: end; }
+.linkedin-add .field { flex: 1 1 18rem; }
+.linkedin-card-note {
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.linkedin-setup summary { cursor: pointer; font-weight: 600; padding: var(--space-2) 0; }
+.linkedin-setup ol { display: flex; flex-direction: column; gap: var(--space-2); padding-left: var(--space-5); }
+.linkedin-copy { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin-top: var(--space-2); }
+.linkedin-copy code { overflow-wrap: anywhere; font-size: var(--text-meta); }
+
+/* ── Import (Google and contact files) ──────────────────── */
+
+.import-sources { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.import-sources li { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: center; }
+.import-source-tags { display: flex; gap: var(--space-2); align-items: center; font-size: var(--text-small); color: var(--text-secondary); }
+.import-source-tags input { width: 12rem; padding: var(--space-1) var(--space-2); }
+.import-add { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.import-drop {
+  display: block;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  text-align: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.import-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.import-drop:focus-within, .import-drop-over { border-color: var(--accent); color: var(--text-primary); }
+.import-setup summary { cursor: pointer; font-weight: 600; padding: var(--space-2) 0; }
+.import-setup ol { display: flex; flex-direction: column; gap: var(--space-2); padding-left: var(--space-5); }
+.import-setup code { overflow-wrap: anywhere; }
+.import-options { display: flex; flex-direction: column; gap: var(--space-2); }
+.import-check { font-size: var(--text-small); }
+.import-filter { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.import-filter input { flex: 1 1 12rem; }
+.import-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.import-row { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3) 0; border-bottom: 1px solid var(--border); }
+.import-row input[type="checkbox"] { margin-top: 0.3rem; flex: none; }
+.import-row-body { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; overflow-wrap: anywhere; }
+.import-row select { margin-left: var(--space-2); padding: var(--space-1) var(--space-2); font-size: var(--text-meta); }
+.import-status { font-weight: 600; }
+.import-new { color: var(--accent); }
+.import-name { color: var(--text-primary); }
+.import-go { align-items: center; }

@@ -27,6 +27,10 @@ import "./crm/views/home";
 import "./crm/views/contacts";
 import "./crm/views/organizations";
 import "./crm/views/projects";
+// Plugins.
+import "./crm/views/linkedin";
+import "./crm/views/import";
+import { SHARE_TARGET_PATH, shareTargetRoute } from "./crm/linkedin/capture";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -50,8 +54,45 @@ function themeFooter(): string {
     </footer>`;
 }
 
+/**
+ * Deep links — the phone's share menu, the bookmarklet, an iPhone Shortcut —
+ * open the app on a hash route such as `#/contacts/new?…`. Sign-in cannot
+ * keep it: OIDC refuses a redirect URL with a fragment, so both a fresh login
+ * and the silent session restore on every page load come back to the bare
+ * address. The route is put aside in this tab before sign-in and taken back
+ * after it.
+ */
+const PENDING_ROUTE = "crm:pending-route";
+
+function rememberRoute(): void {
+  // Android's share target launches `/share-target?text=…`: turn it into the
+  // prefill route on `/`, which is also the only address sign-in redirects to.
+  if (location.pathname === SHARE_TARGET_PATH) {
+    const route = shareTargetRoute(location.pathname, location.search);
+    history.replaceState(null, "", `/${route ? `#${route}` : ""}`);
+  }
+  try {
+    if (location.hash.length > 2) sessionStorage.setItem(PENDING_ROUTE, location.hash);
+    // A plain visit (no hash, not a return from the provider) clears a leftover.
+    else if (!/[?&](code|state)=/.test(location.search)) sessionStorage.removeItem(PENDING_ROUTE);
+  } catch {
+    // Storage blocked: deep links then only work when already signed in.
+  }
+}
+
+function restoreRoute(): void {
+  try {
+    const pending = sessionStorage.getItem(PENDING_ROUTE);
+    sessionStorage.removeItem(PENDING_ROUTE);
+    if (pending && location.hash.length <= 2) history.replaceState(null, "", `${location.pathname}${pending}`);
+  } catch {
+    // See rememberRoute.
+  }
+}
+
 async function main(): Promise<void> {
   const state = await completeLogin();
+  if (state.loggedIn) restoreRoute();
 
   if (!state.loggedIn) {
     renderLoginView(
@@ -199,6 +240,7 @@ async function startDemo(): Promise<void> {
   await startCrm(store, "https://demo.invalid/profile/card#me", store.root);
 }
 
+rememberRoute();
 trackInputModality();
 // Once, on the container: every screen replaces its contents, switch included.
 wireThemeButton(app);

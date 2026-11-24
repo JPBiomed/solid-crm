@@ -85,7 +85,7 @@ function renderContactRows(ctx: Ctx): string {
 function renderList(ctx: Ctx): void {
   renderScreen(ctx, {
     title: "Contacts",
-    actions: `<a class="crm-button" href="#/contacts/new">New contact</a>`,
+    actions: `<a class="crm-button ghost" href="#/import">Import</a> <a class="crm-button" href="#/contacts/new">New contact</a>`,
     body: `
       ${renderFilterBar(ctx, "/contacts", tagCounts(ctx.data.contacts))}
       <div id="results">${renderContactRows(ctx)}</div>`,
