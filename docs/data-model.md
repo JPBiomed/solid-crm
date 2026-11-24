@@ -88,3 +88,19 @@ contact instead of making a duplicate.
 
 Plugins add screens with `registerRoute` from `src/crm/routes.ts`; see the
 comment there.
+
+### LinkedIn plugin
+
+`#/linkedin` (`src/crm/views/linkedin.ts`) shows contacts that have a
+`crm:linkedinStatus`, by status. It writes nothing new to the pod. Moving
+someone saves the contact's status. Moving them to Connected or Met also sets
+`crm:connectedOn` to today if it is empty. Each move past Interesting logs a
+`crm:Interaction` with `crm:channel "linkedin"` on the contact and their
+organizations.
+
+Capture (`src/crm/linkedin/capture.ts`) ends on the prefill route above, with
+`source=linkedin&status=interesting`. Android's share menu opens
+`/share-target?title=&text=&url=` (the `share_target` in
+`public/manifest.webmanifest`), which `main.ts` turns into that route. A deep
+link survives sign-in because `main.ts` keeps the hash in `sessionStorage`
+while the browser goes to the provider and back.
