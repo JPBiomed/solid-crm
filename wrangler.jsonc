@@ -1,0 +1,11 @@
+// Cloudflare Workers static-assets deploy: `npm run build`, then `npx wrangler deploy`.
+// Only the built files are served; there is no Worker code.
+{
+  "name": "solid-crm",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    // Hash routes need nothing, but /share-target (the Android share menu) must load index.html.
+    "not_found_handling": "single-page-application"
+  }
+}

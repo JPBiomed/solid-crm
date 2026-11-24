@@ -25,3 +25,12 @@ export const SESSION_ID = "mom-crm";
  * people know where their pod lives, not what their WebID is.
  */
 export const DEFAULT_IDENTIFIER = "https://pod.mapsofmaking.org/";
+
+/**
+ * The Google OAuth client (type "Web application") the import screen signs in
+ * with to read Google contacts. Not a secret: it is visible in every page that
+ * uses it. Empty here means it is set on the import screen and kept in the
+ * pod (`crm/settings.ttl#google`), so one build serves several deployments.
+ * Steps to create one: docs/google-contacts.md.
+ */
+export const GOOGLE_CLIENT_ID = "";

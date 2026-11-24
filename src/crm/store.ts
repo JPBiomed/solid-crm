@@ -16,10 +16,13 @@
  *   another record survives.
  */
 import {
+  buildThing,
   createSolidDataset,
+  createThing,
   FetchError,
   getSolidDataset,
   getThing,
+  getStringNoLocale,
   getThingAll,
   removeThing,
   saveSolidDatasetAt,
@@ -47,6 +50,7 @@ import {
   type Stage,
   type Task,
 } from "./model";
+import { CRM } from "./vocab";
 
 export const COLLECTIONS = [
   "contacts",
@@ -166,6 +170,41 @@ export class CrmStore {
     for (const r of saved) ds = setThing(ds, toThing(r));
     await this.write(collection, ds);
     return saved;
+  }
+
+  /**
+   * Like `saveMany`, in writes of `size` records: a first import of a few
+   * thousand Google contacts is one PATCH per chunk instead of one huge one
+   * that a server may refuse. `onProgress` gets the number saved so far.
+   */
+  async saveInChunks<T extends RecordBase>(
+    collection: Collection,
+    records: T[],
+    toThing: (r: T) => Thing,
+    onProgress?: (done: number) => void,
+    size = 250
+  ): Promise<T[]> {
+    const saved: T[] = [];
+    for (let i = 0; i < records.length; i += size) {
+      saved.push(...(await this.saveMany(collection, records.slice(i, i + size), toThing)));
+      onProgress?.(saved.length);
+    }
+    return saved;
+  }
+
+  /** The Google OAuth client ID typed on the import screen, kept in `settings.ttl#google`. */
+  async googleClientId(): Promise<string> {
+    const thing = getThing(await this.read("settings"), `${this.docUrl("settings")}#google`);
+    return (thing && getStringNoLocale(thing, CRM("googleClientId"))) ?? "";
+  }
+
+  async setGoogleClientId(clientId: string): Promise<void> {
+    let ds = await this.readFresh("settings");
+    const thing = buildThing(createThing({ url: `${this.docUrl("settings")}#google` }))
+      .addStringNoLocale(CRM("googleClientId"), clientId.trim())
+      .build();
+    ds = setThing(ds, thing);
+    await this.write("settings", ds);
   }
 
   async remove(collection: Collection, id: string): Promise<void> {

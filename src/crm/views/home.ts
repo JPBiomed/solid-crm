@@ -109,6 +109,11 @@ function renderSettings(ctx: Ctx): void {
         </form>
         <div><button id="save-stages">Save stages</button></div>
       </section>
+      <section class="stack crm-section" aria-labelledby="import-h">
+        <h2 id="import-h">Import</h2>
+        <p class="hint">Bring in contacts from your Google accounts or from vCard and CSV files.</p>
+        <div><a class="crm-button ghost" href="#/import">Import contacts</a></div>
+      </section>
       <section class="stack crm-section" aria-labelledby="pod-h">
         <h2 id="pod-h">Your pod</h2>
         <dl class="crm-facts">

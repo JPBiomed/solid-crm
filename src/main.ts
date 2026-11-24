@@ -29,6 +29,7 @@ import "./crm/views/organizations";
 import "./crm/views/projects";
 // Plugins.
 import "./crm/views/linkedin";
+import "./crm/views/import";
 import { SHARE_TARGET_PATH, shareTargetRoute } from "./crm/linkedin/capture";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
